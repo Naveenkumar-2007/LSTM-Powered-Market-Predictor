@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd 
 import tensorflow as tf
 import pickle
+import sklearn
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential,load_model
 from tensorflow.keras.layers import Dense,LSTM,Dropout
@@ -57,7 +58,7 @@ ax.plot(forcast_pandas['Data'], forcast_pandas['Forecast'], label='Forecast', co
 
 ax.set_xlabel('Date')
 ax.set_ylabel('Price')
-ax.set_title(f'{stock} Price Prediction')
+ax.set_title(f'{stock} Stock Price Prediction')
 ax.legend()
 
 plt.xticks(rotation=45)
