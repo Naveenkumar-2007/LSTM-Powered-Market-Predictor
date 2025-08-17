@@ -24,7 +24,9 @@ with open('scaler.pkl','rb') as f:
     scaler_data=pickle.load(f)
 
 normal=MinMaxScaler(feature_range=(0,1))
-normal_data=scaler_data.transform(data)
+#normal_data=scaler_data.transform(data)
+normal_data = scaler_data.transform(data.values.reshape(-1, 1))
+
 last_back=60
 x_input=normal_data[-last_back:]
 
