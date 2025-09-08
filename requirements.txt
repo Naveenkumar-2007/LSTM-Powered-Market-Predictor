@@ -6,3 +6,4 @@ numpy
 pandas
 datetime
 scikit-learn
+uvicorn
