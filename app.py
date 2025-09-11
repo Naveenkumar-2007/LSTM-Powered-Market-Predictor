@@ -9,17 +9,17 @@ from tensorflow.keras.models import Sequential,load_model
 from tensorflow.keras.layers import Dense,LSTM,Dropout
 import yfinance as yf
 from datetime import datetime,timedelta
-import plotly.graph_objects as go
+
 st.title('📈Stock price Predictor')
 stock=st.sidebar.text_input('Enter your stock symbol',value='GOOG')
-start_time=st.sidebar.date_input('start Date',value=datetime(2018,1,1))
+start_time=st.sidebar.date_input('start Date',value=datetime(2025,1,1))
 end_time=st.sidebar.date_input('End data',value=datetime.today())
 forcast_data=st.sidebar.number_input('Future prediction Num',min_value=1,max_value=30,value=7)
 df=yf.download(stock,start=start_time,end=end_time)
 data=df[['Close']]
 
 
-model=load_model('lstm.h5')
+model=load_model('model.h5')
 with open('scaler.pkl','rb') as f:
     scaler_data=pickle.load(f)
 
