@@ -9,6 +9,7 @@ from tensorflow.keras.models import Sequential,load_model
 from tensorflow.keras.layers import Dense,LSTM,Dropout
 import yfinance as yf
 from datetime import datetime,timedelta
+import pandas_datareader.data as web
 
 st.title('📈Stock price Predictor')
 stock=st.sidebar.text_input('Enter your stock symbol',value='GOOG')
@@ -16,6 +17,8 @@ start_time=st.sidebar.date_input('start Date',value=datetime(2025,1,1))
 end_time=st.sidebar.date_input('End data',value=datetime.today())
 forcast_data=st.sidebar.number_input('Future prediction Num',min_value=1,max_value=30,value=7)
 df=yf.download(stock,start=start_time,end=end_time)
+#df = web.DataReader("AAPL", "stooq", start_time, end_time)
+df = df.sort_index()   # sort ascending
 data=df[['Close']]
 
 
