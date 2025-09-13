@@ -6,5 +6,3 @@ numpy
 pandas
 datetime
 scikit-learn==1.6.1
-gunicorn
-uvicorn
