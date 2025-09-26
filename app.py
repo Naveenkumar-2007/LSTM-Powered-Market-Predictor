@@ -82,8 +82,32 @@ if missing_files:
     with col4:
         st.metric("Period Low", f"${features['Low'].min():.2f}")
     
-    # Show charts
-    st.subheader("📈 Price History")
+    # Show charts including today's data
+    st.subheader("📈 Price History (Including Today)")
+    
+    # Get today's live price if available
+    try:
+        live_ticker = yf.Ticker(stock)
+        live_info = live_ticker.info
+        current_price = live_info.get('currentPrice', live_info.get('regularMarketPrice'))
+        
+        if current_price:
+            # Create extended dataframe with today's estimated price
+            today = datetime.today().date()
+            last_date = features.index[-1].date()
+            
+            if today > last_date:
+                st.info(f"📅 **Today's Live Price**: ${current_price:.2f}")
+                
+                # Add simple trend prediction for demo
+                recent_trend = features['Close'].tail(5).pct_change().mean()
+                tomorrow_estimate = current_price * (1 + recent_trend)
+                
+                st.write(f"📈 **Simple Trend Estimate for Tomorrow**: ${tomorrow_estimate:.2f}")
+                st.caption("*This is a basic trend calculation, not AI prediction*")
+    except:
+        pass
+    
     st.line_chart(features[['Open', 'High', 'Low', 'Close']])
     
     st.subheader("📊 Volume")
@@ -220,14 +244,20 @@ if len(forecast_prices) == 0:
     st.error("No forecast data generated. Please check the model and data.")
     st.stop()
 
-forecast_dates = pd.date_range(end_time + timedelta(days=1), periods=len(forecast_prices))
+st.subheader(f"Forecast including today + next {forecast_days-1} days")
+
+# Add today's current price as the first "prediction" for reference
+today_price = df['Close'].iloc[-1].item()
+forecast_prices_with_today = [today_price] + forecast_prices
+forecast_days_with_today = forecast_days + 1
+
+# Generate dates starting from today
+forecast_dates = pd.date_range(datetime.today().date(), periods=len(forecast_prices_with_today))
 forecast_df = pd.DataFrame({
     "Date": forecast_dates,
-    "Forecast": forecast_prices
+    "Price_Type": ["Current"] + ["Predicted"] * len(forecast_prices),
+    "Forecast": forecast_prices_with_today
 })
-
-
-st.subheader(f"Forecast for next {forecast_days} days")
 
 # Show live price comparison with automatic updates
 col1, col2 = st.columns(2)
@@ -254,12 +284,40 @@ with col2:
     except:
         st.metric(label="💰 Current Live Price", value="Updating...", delta=None)
 
-st.write(forecast_df)
+# Display the forecast table with better formatting
+st.write("📊 **Forecast Table:**")
+forecast_display = forecast_df.copy()
+forecast_display['Forecast'] = forecast_display['Forecast'].apply(lambda x: f"${x:.2f}")
+forecast_display['Date'] = forecast_display['Date'].dt.strftime('%Y-%m-%d')
+st.dataframe(forecast_display, use_container_width=True)
 
-# Plot
-fig, ax = plt.subplots(figsize=(10, 5))
-ax.plot(df.index, df['Close'], label="Historical Price", color="red")
-ax.plot(forecast_df['Date'], forecast_df['Forecast'], label="Forecast", color="green", marker="o")
+# Plot with improved visualization
+fig, ax = plt.subplots(figsize=(12, 6))
+
+# Historical prices (excluding today if it overlaps)
+historical_end_date = df.index[-1].date()
+today_date = datetime.today().date()
+
+if historical_end_date < today_date:
+    # Historical data doesn't include today
+    ax.plot(df.index, df['Close'], label="Historical Price", color="blue", linewidth=2)
+else:
+    # Historical data includes today, so exclude today from historical plot
+    historical_df = df[df.index.date < today_date]
+    if not historical_df.empty:
+        ax.plot(historical_df.index, historical_df['Close'], label="Historical Price", color="blue", linewidth=2)
+
+# Today's price (current/actual)
+today_forecast = forecast_df[forecast_df['Price_Type'] == 'Current']
+if not today_forecast.empty:
+    ax.scatter(today_forecast['Date'], today_forecast['Forecast'], 
+              label="Today's Price", color="orange", s=100, zorder=5)
+
+# Future predictions
+future_forecast = forecast_df[forecast_df['Price_Type'] == 'Predicted']
+if not future_forecast.empty:
+    ax.plot(future_forecast['Date'], future_forecast['Forecast'], 
+           label="AI Predictions", color="green", marker="o", linewidth=2, markersize=6)
 ax.set_xlabel("Date")
 ax.set_ylabel("Price")
 ax.set_title(f"{stock} Stock Price Prediction (Return-based LSTM)")
