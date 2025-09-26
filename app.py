@@ -139,13 +139,127 @@ if missing_files:
 
 # If we reach here, model files exist
 try:
-    # Clear any existing TensorFlow sessions
+    # Clear any existing TensorFlow sessions and reset state
     tf.keras.backend.clear_session()
     
-    model = load_model("model_returns.h5")
+    # Try multiple approaches to load the model
+    model = None
+    
+    # Approach 1: Standard loading
+    try:
+        model = load_model("model_returns.h5", compile=False)
+        # Manually compile if needed
+        model.compile(optimizer='adam', loss='mse', metrics=['mae'])
+        st.success("✅ Model loaded successfully (standard method)")
+    except Exception as e1:
+        st.warning(f"⚠️ Standard loading failed: {str(e1)}")
+        
+        # Approach 2: Load without compilation
+        try:
+            model = tf.keras.models.load_model("model_returns.h5", compile=False)
+            st.success("✅ Model loaded successfully (no compile)")
+        except Exception as e2:
+            st.warning(f"⚠️ No-compile loading failed: {str(e2)}")
+            
+            # Approach 3: Load weights only (if architecture is known)
+            try:
+                # Create a basic LSTM model architecture
+                from tensorflow.keras.models import Sequential
+                from tensorflow.keras.layers import LSTM, Dense, Dropout
+                
+                model = Sequential([
+                    LSTM(50, return_sequences=True, input_shape=(60, 5)),
+                    Dropout(0.2),
+                    LSTM(50, return_sequences=False),
+                    Dropout(0.2),
+                    Dense(1)
+                ])
+                
+                # Try to load weights
+                model.load_weights("model_returns.h5")
+                model.compile(optimizer='adam', loss='mse', metrics=['mae'])
+                st.success("✅ Model reconstructed and weights loaded")
+                
+            except Exception as e3:
+                st.error(f"❌ All model loading approaches failed:")
+                st.error(f"1. Standard: {str(e1)}")
+                st.error(f"2. No-compile: {str(e2)}")
+                st.error(f"3. Weights-only: {str(e3)}")
+                st.info("Switching to Demo Mode due to model loading issues")
+                
+                # Fall back to demo mode
+                model = None
+    
+    if model is None:
+        # Force demo mode
+        st.warning("⚠️ Running in Demo Mode - Model couldn't be loaded")
+        # Jump to demo mode logic (reuse the demo code)
+        raise Exception("Model loading failed, switching to demo mode")
+
 except Exception as e:
-    st.error(f"❌ Error loading model: {str(e)}")
-    st.info("Please ensure 'model_returns.h5' file exists in the current directory.")
+    st.warning("⚠️ Model loading issues detected. Running in **Demo Mode**")
+    st.info("Showing stock analysis without ML predictions")
+    
+    # Demo Mode - Enhanced stock analysis
+    st.subheader(f"📊 Stock Analysis for {stock} (Demo Mode)")
+    
+    # Display current metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Current Price", f"${features['Close'].iloc[-1]:.2f}")
+    with col2:
+        current_change = features['Close'].iloc[-1] - features['Close'].iloc[-2] if len(features) > 1 else 0
+        st.metric("Daily Change", f"${current_change:.2f}", f"{current_change:.2f}")
+    with col3:
+        st.metric("Period High", f"${features['High'].max():.2f}")
+    with col4:
+        st.metric("Period Low", f"${features['Low'].min():.2f}")
+    
+    # Technical Analysis
+    st.subheader("📈 Technical Analysis")
+    
+    # Calculate moving averages
+    features['MA5'] = features['Close'].rolling(window=5).mean()
+    features['MA20'] = features['Close'].rolling(window=20).mean()
+    features['MA50'] = features['Close'].rolling(window=50).mean()
+    
+    # Simple trend prediction based on moving averages
+    current_price = features['Close'].iloc[-1]
+    ma5_current = features['MA5'].iloc[-1] if not pd.isna(features['MA5'].iloc[-1]) else current_price
+    ma20_current = features['MA20'].iloc[-1] if not pd.isna(features['MA20'].iloc[-1]) else current_price
+    
+    # Simple trend analysis
+    if ma5_current > ma20_current:
+        trend = "📈 Upward"
+        trend_color = "green"
+    else:
+        trend = "📉 Downward" 
+        trend_color = "red"
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Current Trend", trend)
+    with col2:
+        # Simple next-day estimate based on recent trend
+        recent_returns = features['Close'].pct_change().tail(5).mean()
+        next_day_estimate = current_price * (1 + recent_returns)
+        st.metric("Tomorrow Estimate", f"${next_day_estimate:.2f}", f"{(next_day_estimate - current_price):+.2f}")
+    
+    # Chart with moving averages
+    st.subheader("📊 Price Chart with Moving Averages")
+    chart_data = features[['Close', 'MA5', 'MA20', 'MA50']].tail(100)  # Last 100 days
+    st.line_chart(chart_data)
+    
+    # Volume analysis
+    st.subheader("📊 Volume Analysis")
+    st.bar_chart(features['Volume'].tail(30))  # Last 30 days volume
+    
+    # Recent data table
+    st.subheader("📋 Recent Data (Last 10 days)")
+    recent_data = features[['Open', 'High', 'Low', 'Close', 'Volume', 'MA5', 'MA20']].tail(10)
+    st.dataframe(recent_data.round(2), use_container_width=True)
+    
+    st.info("💡 **Demo Mode**: This shows technical analysis without AI predictions. Deploy with working model files for LSTM-powered forecasting!")
     st.stop()
 
 try:
@@ -153,9 +267,59 @@ try:
         scaler_X = pickle.load(f)
     with open("scaler_y.pkl","rb") as f:
         scaler_y = pickle.load(f)
+    st.success("✅ Scalers loaded successfully")
+    scalers_available = True
+except FileNotFoundError as e:
+    st.error(f"❌ Scaler files not found: {str(e)}")
+    st.info("Please ensure 'scaler_X.pkl' and 'scaler_y.pkl' files exist in the current directory.")
+    st.warning("⚠️ Running in Demo Mode - Missing scaler files")
+    scalers_available = False
+    scaler_X = None
+    scaler_y = None
 except Exception as e:
     st.error(f"❌ Error loading scalers: {str(e)}")
-    st.info("Please ensure 'scaler_X.pkl' and 'scaler_y.pkl' files exist in the current directory.")
+    st.info("There might be compatibility issues with the scaler files.")
+    st.warning("⚠️ Running in Demo Mode - Scaler loading error")
+    scalers_available = False
+    scaler_X = None
+    scaler_y = None
+
+# Check if both model and scalers are available
+if not scalers_available:
+    # Enhanced Demo Mode when scalers fail
+    st.subheader(f"📊 Stock Analysis for {stock} (Demo Mode - No Scalers)")
+    
+    # Display current metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Current Price", f"${features['Close'].iloc[-1]:.2f}")
+    with col2:
+        current_change = features['Close'].iloc[-1] - features['Close'].iloc[-2] if len(features) > 1 else 0
+        st.metric("Daily Change", f"${current_change:.2f}", f"{current_change:.2f}")
+    with col3:
+        st.metric("Period High", f"${features['High'].max():.2f}")
+    with col4:
+        st.metric("Period Low", f"${features['Low'].min():.2f}")
+    
+    # Technical Analysis
+    st.subheader("📈 Technical Analysis")
+    
+    # Calculate moving averages
+    features['MA5'] = features['Close'].rolling(window=5).mean()
+    features['MA20'] = features['Close'].rolling(window=20).mean()
+    features['MA50'] = features['Close'].rolling(window=50).mean()
+    
+    # Chart with moving averages
+    st.subheader("📊 Price Chart with Moving Averages")
+    chart_data = features[['Close', 'MA5', 'MA20', 'MA50']].tail(60)  # Last 60 days
+    st.line_chart(chart_data)
+    
+    # Recent data
+    st.subheader("📋 Recent Data (Last 5 days)")
+    recent_data = features[['Open', 'High', 'Low', 'Close', 'Volume']].tail(5)
+    st.dataframe(recent_data.round(2), use_container_width=True)
+    
+    st.info("💡 **Demo Mode**: Upload working scaler files for ML predictions!")
     st.stop()
 
 # Scale Features
@@ -317,10 +481,10 @@ if not today_forecast.empty:
 future_forecast = forecast_df[forecast_df['Price_Type'] == 'Predicted']
 if not future_forecast.empty:
     ax.plot(future_forecast['Date'], future_forecast['Forecast'], 
-           label="AI Predictions", color="green", marker="o", linewidth=2, markersize=6)
+           label="Predictions", color="green", marker="o", linewidth=2, markersize=6)
 ax.set_xlabel("Date")
 ax.set_ylabel("Price")
-ax.set_title(f"{stock} Stock Price Prediction (Return-based LSTM)")
+ax.set_title(f"{stock} Stock Price Prediction ")
 ax.legend()
 plt.xticks(rotation=45)
 st.pyplot(fig)
