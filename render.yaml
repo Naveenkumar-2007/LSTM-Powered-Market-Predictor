@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: stock-price-predictor
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --server.fileWatcherType none
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.5
+      - key: STREAMLIT_SERVER_PORT
+        value: 10000
+      - key: STREAMLIT_SERVER_ADDRESS
+        value: 0.0.0.0
