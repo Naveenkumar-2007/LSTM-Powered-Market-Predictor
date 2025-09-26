@@ -24,20 +24,69 @@ except ImportError:
 st.title("📈 Stock Price Predictor ")
 
 stock = st.sidebar.text_input("Enter your stock symbol", value="TSLA")
+
 # Set start date to ensure we have enough historical data (at least 90 days for 60-day lookback)
-default_start = datetime(2024, 1, 1)  # Changed to ensure sufficient historical data
+# Use a more conservative date range to avoid data availability issues
+today = datetime.today()
+# Go back 2 years to ensure we have plenty of data
+default_start = today - pd.Timedelta(days=730)  # 2 years of data
 start_time = st.sidebar.date_input("Start Date", value=default_start)
-end_time = st.sidebar.date_input("End Date", value=datetime.today())
+end_time = st.sidebar.date_input("End Date", value=today)
+
+# Validate date range
+if start_time >= end_time:
+    st.error("❌ Start date must be before end date!")
+    st.stop()
+
+# Check if date range is sufficient for ML predictions
+days_requested = (end_time - start_time).days
+if days_requested < 90:
+    st.warning(f"⚠️ You've selected only {days_requested} days. For better ML predictions, consider using at least 90 days of historical data.")
+
 forecast_days = st.sidebar.number_input("Future prediction days", min_value=1, max_value=30, value=7)
 
 
-df = yf.download(stock, start=start_time, end=end_time)
-df = df.sort_index()
-
-# Check if we got any data
-if df.empty:
-    st.error(f"❌ No data found for stock symbol '{stock}' in the specified date range.")
-    st.info("Please check the stock symbol or try a different date range.")
+try:
+    st.info(f"📡 Fetching data for {stock.upper()} from {start_time} to {end_time}...")
+    
+    # Add progress indicator
+    with st.spinner('Downloading stock data...'):
+        # Try downloading with different parameters to handle edge cases
+        try:
+            df = yf.download(stock.upper(), start=start_time, end=end_time, progress=False, auto_adjust=True, prepost=False, threads=True)
+        except Exception as first_attempt:
+            # Fallback: try without some advanced options
+            st.info("Retrying with alternative download method...")
+            df = yf.download(stock.upper(), start=start_time, end=end_time, progress=False)
+    
+    if df is None or df.empty:
+        st.error(f"❌ No data found for stock symbol '{stock.upper()}' in the specified date range.")
+        st.info("**Possible solutions:**")
+        st.info("• Check if the stock symbol is correct (e.g., TSLA, AAPL, MSFT)")
+        st.info("• Try a different date range (some stocks may not have data for all periods)")
+        st.info("• Ensure you have internet connectivity")
+        st.info("• Stock markets may be closed or data might be delayed")
+        st.info("• Some symbols may require exchange suffixes (e.g., BTC-USD for Bitcoin)")
+        
+        # Suggest alternative symbols
+        st.info("**Popular symbols to try:** AAPL, MSFT, GOOGL, AMZN, TSLA, NVDA, META")
+        st.stop()
+    
+    df = df.sort_index()
+    st.success(f"✅ Successfully loaded {len(df)} days of data for {stock.upper()}")
+    
+except Exception as e:
+    st.error(f"❌ Error downloading data: {str(e)}")
+    st.info("**This could be due to:**")
+    st.info("• Network connectivity issues")
+    st.info("• Yahoo Finance API limitations or temporary outages")
+    st.info("• Invalid stock symbol format")
+    st.info("• Market data unavailability for the selected period")
+    st.info("• Rate limiting (try again in a few moments)")
+    st.info("**Try:** Check your internet connection and verify the stock symbol")
+    
+    # Suggest immediate alternatives
+    st.info("**Quick test:** Try entering 'AAPL' or 'MSFT' to verify the app is working")
     st.stop()
 
 # Check if we have the required columns
